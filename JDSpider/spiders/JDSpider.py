@@ -10,6 +10,8 @@ import re
 import logging
 import json
 import requests
+import traceback
+
 from scrapy import Spider
 from scrapy.selector import Selector
 from scrapy.http import Request
@@ -121,6 +123,33 @@ class JDSpider(Spider):
         yield shopItem
 
         productsItem = ProductsItem()
+        category_names = []
+        category_url = []
+        for c_item in response.xpath('//*[@id="crumb-wrap"]/div/div[1]/div'):
+            c_text = c_item.xpath('text()').get()
+            if c_text and c_text.strip() and c_text.strip().strip('>'):
+                category_names.append(c_text.strip())
+            c_a_text = c_item.xpath('a/text()').get()
+            if c_a_text and c_a_text.strip() and c_a_text.strip().strip('>'):
+                category_names.append(c_a_text.strip())
+            c_url = c_item.xpath('a/@href').get()
+            if c_url and c_url.strip():
+                category_url.append('https:{}'.format(c_url.strip()))
+        try:
+            for k, v in dict(zip(['category1', 'category2', 'category3', 'brand_name', 'product_name'], category_names)).items():
+                productsItem[k] = v
+        except:
+            print(traceback.format_exc())
+            productsItem['remark_name'] = 'TTFGF'.join(category_names)
+        try:
+            # 处理没有一级品类url的情况
+            if len(category_url) == 3:
+                category_url.insert(0, None)
+            for k, v in dict(zip(['category1_url', 'category2_url', 'category3_url', 'brand_url'], category_url)).items():
+                productsItem[k] = v
+        except:
+            print(traceback.format_exc())
+            productsItem['remark_url'] = 'TTFGF'.join(category_url)
         productsItem['shopId'] = shop_id
         productsItem['category'] = category
         try:
@@ -168,258 +197,258 @@ class JDSpider(Spider):
         data = dict()
         data['product_id'] = product_id
         yield productsItem
-        yield Request(url=comment_url % (product_id, '0'), callback=self.parse_comments, meta=data)
-
-    def parse_comments(self, response):
-        """获取商品comment"""
-        try:
-            data = json.loads(response.text)
-        except Exception as e:
-            print('get comment failed:', e)
-            return None
-
-        product_id = response.meta['product_id']
-
-        commentSummaryItem = CommentSummaryItem()
-        commentSummary = data.get('productCommentSummary')
-        commentSummaryItem['goodRateShow'] = commentSummary.get('goodRateShow')
-        commentSummaryItem['poorRateShow'] = commentSummary.get('poorRateShow')
-        commentSummaryItem['poorCountStr'] = commentSummary.get('poorCountStr')
-        commentSummaryItem['averageScore'] = commentSummary.get('averageScore')
-        commentSummaryItem['generalCountStr'] = commentSummary.get('generalCountStr')
-        commentSummaryItem['showCount'] = commentSummary.get('showCount')
-        commentSummaryItem['showCountStr'] = commentSummary.get('showCountStr')
-        commentSummaryItem['goodCount'] = commentSummary.get('goodCount')
-        commentSummaryItem['generalRate'] = commentSummary.get('generalRate')
-        commentSummaryItem['generalCount'] = commentSummary.get('generalCount')
-        commentSummaryItem['skuId'] = commentSummary.get('skuId')
-        commentSummaryItem['goodCountStr'] = commentSummary.get('goodCountStr')
-        commentSummaryItem['poorRate'] = commentSummary.get('poorRate')
-        commentSummaryItem['afterCount'] = commentSummary.get('afterCount')
-        commentSummaryItem['goodRateStyle'] = commentSummary.get('goodRateStyle')
-        commentSummaryItem['poorCount'] = commentSummary.get('poorCount')
-        commentSummaryItem['skuIds'] = commentSummary.get('skuIds')
-        commentSummaryItem['poorRateStyle'] = commentSummary.get('poorRateStyle')
-        commentSummaryItem['generalRateStyle'] = commentSummary.get('generalRateStyle')
-        commentSummaryItem['commentCountStr'] = commentSummary.get('commentCountStr')
-        commentSummaryItem['commentCount'] = commentSummary.get('commentCount')
-        commentSummaryItem['productId'] = commentSummary.get('productId')  # 同ProductsItem的id相同
-        commentSummaryItem['_id'] = commentSummary.get('productId')
-        commentSummaryItem['afterCountStr'] = commentSummary.get('afterCountStr')
-        commentSummaryItem['goodRate'] = commentSummary.get('goodRate')
-        commentSummaryItem['generalRateShow'] = commentSummary.get('generalRateShow')
-        commentSummaryItem['jwotestProduct'] = data.get('jwotestProduct')
-        commentSummaryItem['maxPage'] = data.get('maxPage')
-        commentSummaryItem['score'] = data.get('score')
-        commentSummaryItem['soType'] = data.get('soType')
-        commentSummaryItem['imageListCount'] = data.get('imageListCount')
-        yield commentSummaryItem
-
-        for hotComment in data['hotCommentTagStatistics']:
-            hotCommentTagItem = HotCommentTagItem()
-            hotCommentTagItem['_id'] = hotComment.get('id')
-            hotCommentTagItem['name'] = hotComment.get('name')
-            hotCommentTagItem['status'] = hotComment.get('status')
-            hotCommentTagItem['rid'] = hotComment.get('rid')
-            hotCommentTagItem['productId'] = hotComment.get('productId')
-            hotCommentTagItem['count'] = hotComment.get('count')
-            hotCommentTagItem['created'] = hotComment.get('created')
-            hotCommentTagItem['modified'] = hotComment.get('modified')
-            hotCommentTagItem['type'] = hotComment.get('type')
-            hotCommentTagItem['canBeFiltered'] = hotComment.get('canBeFiltered')
-            yield hotCommentTagItem
-
-        for comment_item in data['comments']:
-            comment = CommentItem()
-
-            comment['_id'] = comment_item.get('id')
-            comment['productId'] = product_id
-            comment['guid'] = comment_item.get('guid')
-            comment['content'] = comment_item.get('content')
-            comment['creationTime'] = comment_item.get('creationTime')
-            comment['isTop'] = comment_item.get('isTop')
-            comment['referenceId'] = comment_item.get('referenceId')
-            comment['referenceName'] = comment_item.get('referenceName')
-            comment['referenceType'] = comment_item.get('referenceType')
-            comment['referenceTypeId'] = comment_item.get('referenceTypeId')
-            comment['firstCategory'] = comment_item.get('firstCategory')
-            comment['secondCategory'] = comment_item.get('secondCategory')
-            comment['thirdCategory'] = comment_item.get('thirdCategory')
-            comment['replyCount'] = comment_item.get('replyCount')
-            comment['score'] = comment_item.get('score')
-            comment['status'] = comment_item.get('status')
-            comment['title'] = comment_item.get('title')
-            comment['usefulVoteCount'] = comment_item.get('usefulVoteCount')
-            comment['uselessVoteCount'] = comment_item.get('uselessVoteCount')
-            comment['userImage'] = 'http://' + comment_item.get('userImage')
-            comment['userImageUrl'] = 'http://' + comment_item.get('userImageUrl')
-            comment['userLevelId'] = comment_item.get('userLevelId')
-            comment['userProvince'] = comment_item.get('userProvince')
-            comment['viewCount'] = comment_item.get('viewCount')
-            comment['orderId'] = comment_item.get('orderId')
-            comment['isReplyGrade'] = comment_item.get('isReplyGrade')
-            comment['nickname'] = comment_item.get('nickname')
-            comment['userClient'] = comment_item.get('userClient')
-            comment['mergeOrderStatus'] = comment_item.get('mergeOrderStatus')
-            comment['discussionId'] = comment_item.get('discussionId')
-            comment['productColor'] = comment_item.get('productColor')
-            comment['productSize'] = comment_item.get('productSize')
-            comment['imageCount'] = comment_item.get('imageCount')
-            comment['integral'] = comment_item.get('integral')
-            comment['userImgFlag'] = comment_item.get('userImgFlag')
-            comment['anonymousFlag'] = comment_item.get('anonymousFlag')
-            comment['userLevelName'] = comment_item.get('userLevelName')
-            comment['plusAvailable'] = comment_item.get('plusAvailable')
-            comment['recommend'] = comment_item.get('recommend')
-            comment['userLevelColor'] = comment_item.get('userLevelColor')
-            comment['userClientShow'] = comment_item.get('userClientShow')
-            comment['isMobile'] = comment_item.get('isMobile')
-            comment['days'] = comment_item.get('days')
-            comment['afterDays'] = comment_item.get('afterDays')
-            yield comment
-
-            if 'images' in comment_item:
-                for image in comment_item['images']:
-                    commentImageItem = CommentImageItem()
-                    commentImageItem['_id'] = image.get('id')
-                    commentImageItem['associateId'] = image.get('associateId')  # 和CommentItem的discussionId相同
-                    commentImageItem['productId'] = image.get('productId')  # 不是ProductsItem的id，这个值为0
-                    commentImageItem['imgUrl'] = 'http:' + image.get('imgUrl')
-                    commentImageItem['available'] = image.get('available')
-                    commentImageItem['pin'] = image.get('pin')
-                    commentImageItem['dealt'] = image.get('dealt')
-                    commentImageItem['imgTitle'] = image.get('imgTitle')
-                    commentImageItem['isMain'] = image.get('isMain')
-                    yield commentImageItem
-
-        # next page
-        max_page = int(data.get('maxPage', '1'))
-        if max_page > 60:
-            max_page = 60
-        for i in range(1, max_page):
-            url = comment_url % (product_id, str(i))
-            meta = dict()
-            meta['product_id'] = product_id
-            yield Request(url=url, callback=self.parse_comments2, meta=meta)
-
-    def parse_comments2(self, response):
-        """获取商品comment"""
-        try:
-            data = json.loads(response.text)
-        except Exception as e:
-            print('get comment failed:', e)
-            return None
-
-        product_id = response.meta['product_id']
-
-        commentSummaryItem = CommentSummaryItem()
-        commentSummary = data.get('productCommentSummary')
-        commentSummaryItem['goodRateShow'] = commentSummary.get('goodRateShow')
-        commentSummaryItem['poorRateShow'] = commentSummary.get('poorRateShow')
-        commentSummaryItem['poorCountStr'] = commentSummary.get('poorCountStr')
-        commentSummaryItem['averageScore'] = commentSummary.get('averageScore')
-        commentSummaryItem['generalCountStr'] = commentSummary.get('generalCountStr')
-        commentSummaryItem['showCount'] = commentSummary.get('showCount')
-        commentSummaryItem['showCountStr'] = commentSummary.get('showCountStr')
-        commentSummaryItem['goodCount'] = commentSummary.get('goodCount')
-        commentSummaryItem['generalRate'] = commentSummary.get('generalRate')
-        commentSummaryItem['generalCount'] = commentSummary.get('generalCount')
-        commentSummaryItem['skuId'] = commentSummary.get('skuId')
-        commentSummaryItem['goodCountStr'] = commentSummary.get('goodCountStr')
-        commentSummaryItem['poorRate'] = commentSummary.get('poorRate')
-        commentSummaryItem['afterCount'] = commentSummary.get('afterCount')
-        commentSummaryItem['goodRateStyle'] = commentSummary.get('goodRateStyle')
-        commentSummaryItem['poorCount'] = commentSummary.get('poorCount')
-        commentSummaryItem['skuIds'] = commentSummary.get('skuIds')
-        commentSummaryItem['poorRateStyle'] = commentSummary.get('poorRateStyle')
-        commentSummaryItem['generalRateStyle'] = commentSummary.get('generalRateStyle')
-        commentSummaryItem['commentCountStr'] = commentSummary.get('commentCountStr')
-        commentSummaryItem['commentCount'] = commentSummary.get('commentCount')
-        commentSummaryItem['productId'] = commentSummary.get('productId')  # 同ProductsItem的id相同
-        commentSummaryItem['_id'] = commentSummary.get('productId')
-        commentSummaryItem['afterCountStr'] = commentSummary.get('afterCountStr')
-        commentSummaryItem['goodRate'] = commentSummary.get('goodRate')
-        commentSummaryItem['generalRateShow'] = commentSummary.get('generalRateShow')
-        commentSummaryItem['jwotestProduct'] = data.get('jwotestProduct')
-        commentSummaryItem['maxPage'] = data.get('maxPage')
-        commentSummaryItem['score'] = data.get('score')
-        commentSummaryItem['soType'] = data.get('soType')
-        commentSummaryItem['imageListCount'] = data.get('imageListCount')
-        yield commentSummaryItem
-
-        for hotComment in data['hotCommentTagStatistics']:
-            hotCommentTagItem = HotCommentTagItem()
-            hotCommentTagItem['_id'] = hotComment.get('id')
-            hotCommentTagItem['name'] = hotComment.get('name')
-            hotCommentTagItem['status'] = hotComment.get('status')
-            hotCommentTagItem['rid'] = hotComment.get('rid')
-            hotCommentTagItem['productId'] = hotComment.get('productId')
-            hotCommentTagItem['count'] = hotComment.get('count')
-            hotCommentTagItem['created'] = hotComment.get('created')
-            hotCommentTagItem['modified'] = hotComment.get('modified')
-            hotCommentTagItem['type'] = hotComment.get('type')
-            hotCommentTagItem['canBeFiltered'] = hotComment.get('canBeFiltered')
-            yield hotCommentTagItem
-
-        for comment_item in data['comments']:
-            comment = CommentItem()
-            comment['_id'] = comment_item.get('id')
-            comment['productId'] = product_id
-            comment['guid'] = comment_item.get('guid')
-            comment['content'] = comment_item.get('content')
-            comment['creationTime'] = comment_item.get('creationTime')
-            comment['isTop'] = comment_item.get('isTop')
-            comment['referenceId'] = comment_item.get('referenceId')
-            comment['referenceName'] = comment_item.get('referenceName')
-            comment['referenceType'] = comment_item.get('referenceType')
-            comment['referenceTypeId'] = comment_item.get('referenceTypeId')
-            comment['firstCategory'] = comment_item.get('firstCategory')
-            comment['secondCategory'] = comment_item.get('secondCategory')
-            comment['thirdCategory'] = comment_item.get('thirdCategory')
-            comment['replyCount'] = comment_item.get('replyCount')
-            comment['score'] = comment_item.get('score')
-            comment['status'] = comment_item.get('status')
-            comment['title'] = comment_item.get('title')
-            comment['usefulVoteCount'] = comment_item.get('usefulVoteCount')
-            comment['uselessVoteCount'] = comment_item.get('uselessVoteCount')
-            comment['userImage'] = 'http://' + comment_item.get('userImage')
-            comment['userImageUrl'] = 'http://' + comment_item.get('userImageUrl')
-            comment['userLevelId'] = comment_item.get('userLevelId')
-            comment['userProvince'] = comment_item.get('userProvince')
-            comment['viewCount'] = comment_item.get('viewCount')
-            comment['orderId'] = comment_item.get('orderId')
-            comment['isReplyGrade'] = comment_item.get('isReplyGrade')
-            comment['nickname'] = comment_item.get('nickname')
-            comment['userClient'] = comment_item.get('userClient')
-            comment['mergeOrderStatus'] = comment_item.get('mergeOrderStatus')
-            comment['discussionId'] = comment_item.get('discussionId')
-            comment['productColor'] = comment_item.get('productColor')
-            comment['productSize'] = comment_item.get('productSize')
-            comment['imageCount'] = comment_item.get('imageCount')
-            comment['integral'] = comment_item.get('integral')
-            comment['userImgFlag'] = comment_item.get('userImgFlag')
-            comment['anonymousFlag'] = comment_item.get('anonymousFlag')
-            comment['userLevelName'] = comment_item.get('userLevelName')
-            comment['plusAvailable'] = comment_item.get('plusAvailable')
-            comment['recommend'] = comment_item.get('recommend')
-            comment['userLevelColor'] = comment_item.get('userLevelColor')
-            comment['userClientShow'] = comment_item.get('userClientShow')
-            comment['isMobile'] = comment_item.get('isMobile')
-            comment['days'] = comment_item.get('days')
-            comment['afterDays'] = comment_item.get('afterDays')
-            yield comment
-
-            if 'images' in comment_item:
-                for image in comment_item['images']:
-                    commentImageItem = CommentImageItem()
-                    commentImageItem['_id'] = image.get('id')
-                    commentImageItem['associateId'] = image.get('associateId')  # 和CommentItem的discussionId相同
-                    commentImageItem['productId'] = image.get('productId')  # 不是ProductsItem的id，这个值为0
-                    commentImageItem['imgUrl'] = 'http:' + image.get('imgUrl')
-                    commentImageItem['available'] = image.get('available')
-                    commentImageItem['pin'] = image.get('pin')
-                    commentImageItem['dealt'] = image.get('dealt')
-                    commentImageItem['imgTitle'] = image.get('imgTitle')
-                    commentImageItem['isMain'] = image.get('isMain')
-                    yield commentImageItem
-
+        # yield Request(url=comment_url % (product_id, '0'), callback=self.parse_comments, meta=data)
+    #
+    # def parse_comments(self, response):
+    #     """获取商品comment"""
+    #     try:
+    #         data = json.loads(response.text)
+    #     except Exception as e:
+    #         print('get comment failed:', e)
+    #         return None
+    #
+    #     product_id = response.meta['product_id']
+    #
+    #     commentSummaryItem = CommentSummaryItem()
+    #     commentSummary = data.get('productCommentSummary')
+    #     commentSummaryItem['goodRateShow'] = commentSummary.get('goodRateShow')
+    #     commentSummaryItem['poorRateShow'] = commentSummary.get('poorRateShow')
+    #     commentSummaryItem['poorCountStr'] = commentSummary.get('poorCountStr')
+    #     commentSummaryItem['averageScore'] = commentSummary.get('averageScore')
+    #     commentSummaryItem['generalCountStr'] = commentSummary.get('generalCountStr')
+    #     commentSummaryItem['showCount'] = commentSummary.get('showCount')
+    #     commentSummaryItem['showCountStr'] = commentSummary.get('showCountStr')
+    #     commentSummaryItem['goodCount'] = commentSummary.get('goodCount')
+    #     commentSummaryItem['generalRate'] = commentSummary.get('generalRate')
+    #     commentSummaryItem['generalCount'] = commentSummary.get('generalCount')
+    #     commentSummaryItem['skuId'] = commentSummary.get('skuId')
+    #     commentSummaryItem['goodCountStr'] = commentSummary.get('goodCountStr')
+    #     commentSummaryItem['poorRate'] = commentSummary.get('poorRate')
+    #     commentSummaryItem['afterCount'] = commentSummary.get('afterCount')
+    #     commentSummaryItem['goodRateStyle'] = commentSummary.get('goodRateStyle')
+    #     commentSummaryItem['poorCount'] = commentSummary.get('poorCount')
+    #     commentSummaryItem['skuIds'] = commentSummary.get('skuIds')
+    #     commentSummaryItem['poorRateStyle'] = commentSummary.get('poorRateStyle')
+    #     commentSummaryItem['generalRateStyle'] = commentSummary.get('generalRateStyle')
+    #     commentSummaryItem['commentCountStr'] = commentSummary.get('commentCountStr')
+    #     commentSummaryItem['commentCount'] = commentSummary.get('commentCount')
+    #     commentSummaryItem['productId'] = commentSummary.get('productId')  # 同ProductsItem的id相同
+    #     commentSummaryItem['_id'] = commentSummary.get('productId')
+    #     commentSummaryItem['afterCountStr'] = commentSummary.get('afterCountStr')
+    #     commentSummaryItem['goodRate'] = commentSummary.get('goodRate')
+    #     commentSummaryItem['generalRateShow'] = commentSummary.get('generalRateShow')
+    #     commentSummaryItem['jwotestProduct'] = data.get('jwotestProduct')
+    #     commentSummaryItem['maxPage'] = data.get('maxPage')
+    #     commentSummaryItem['score'] = data.get('score')
+    #     commentSummaryItem['soType'] = data.get('soType')
+    #     commentSummaryItem['imageListCount'] = data.get('imageListCount')
+    #     yield commentSummaryItem
+    #
+    #     for hotComment in data['hotCommentTagStatistics']:
+    #         hotCommentTagItem = HotCommentTagItem()
+    #         hotCommentTagItem['_id'] = hotComment.get('id')
+    #         hotCommentTagItem['name'] = hotComment.get('name')
+    #         hotCommentTagItem['status'] = hotComment.get('status')
+    #         hotCommentTagItem['rid'] = hotComment.get('rid')
+    #         hotCommentTagItem['productId'] = hotComment.get('productId')
+    #         hotCommentTagItem['count'] = hotComment.get('count')
+    #         hotCommentTagItem['created'] = hotComment.get('created')
+    #         hotCommentTagItem['modified'] = hotComment.get('modified')
+    #         hotCommentTagItem['type'] = hotComment.get('type')
+    #         hotCommentTagItem['canBeFiltered'] = hotComment.get('canBeFiltered')
+    #         yield hotCommentTagItem
+    #
+    #     for comment_item in data['comments']:
+    #         comment = CommentItem()
+    #
+    #         comment['_id'] = comment_item.get('id')
+    #         comment['productId'] = product_id
+    #         comment['guid'] = comment_item.get('guid')
+    #         comment['content'] = comment_item.get('content')
+    #         comment['creationTime'] = comment_item.get('creationTime')
+    #         comment['isTop'] = comment_item.get('isTop')
+    #         comment['referenceId'] = comment_item.get('referenceId')
+    #         comment['referenceName'] = comment_item.get('referenceName')
+    #         comment['referenceType'] = comment_item.get('referenceType')
+    #         comment['referenceTypeId'] = comment_item.get('referenceTypeId')
+    #         comment['firstCategory'] = comment_item.get('firstCategory')
+    #         comment['secondCategory'] = comment_item.get('secondCategory')
+    #         comment['thirdCategory'] = comment_item.get('thirdCategory')
+    #         comment['replyCount'] = comment_item.get('replyCount')
+    #         comment['score'] = comment_item.get('score')
+    #         comment['status'] = comment_item.get('status')
+    #         comment['title'] = comment_item.get('title')
+    #         comment['usefulVoteCount'] = comment_item.get('usefulVoteCount')
+    #         comment['uselessVoteCount'] = comment_item.get('uselessVoteCount')
+    #         comment['userImage'] = 'http://' + comment_item.get('userImage')
+    #         comment['userImageUrl'] = 'http://' + comment_item.get('userImageUrl')
+    #         comment['userLevelId'] = comment_item.get('userLevelId')
+    #         comment['userProvince'] = comment_item.get('userProvince')
+    #         comment['viewCount'] = comment_item.get('viewCount')
+    #         comment['orderId'] = comment_item.get('orderId')
+    #         comment['isReplyGrade'] = comment_item.get('isReplyGrade')
+    #         comment['nickname'] = comment_item.get('nickname')
+    #         comment['userClient'] = comment_item.get('userClient')
+    #         comment['mergeOrderStatus'] = comment_item.get('mergeOrderStatus')
+    #         comment['discussionId'] = comment_item.get('discussionId')
+    #         comment['productColor'] = comment_item.get('productColor')
+    #         comment['productSize'] = comment_item.get('productSize')
+    #         comment['imageCount'] = comment_item.get('imageCount')
+    #         comment['integral'] = comment_item.get('integral')
+    #         comment['userImgFlag'] = comment_item.get('userImgFlag')
+    #         comment['anonymousFlag'] = comment_item.get('anonymousFlag')
+    #         comment['userLevelName'] = comment_item.get('userLevelName')
+    #         comment['plusAvailable'] = comment_item.get('plusAvailable')
+    #         comment['recommend'] = comment_item.get('recommend')
+    #         comment['userLevelColor'] = comment_item.get('userLevelColor')
+    #         comment['userClientShow'] = comment_item.get('userClientShow')
+    #         comment['isMobile'] = comment_item.get('isMobile')
+    #         comment['days'] = comment_item.get('days')
+    #         comment['afterDays'] = comment_item.get('afterDays')
+    #         yield comment
+    #
+    #         if 'images' in comment_item:
+    #             for image in comment_item['images']:
+    #                 commentImageItem = CommentImageItem()
+    #                 commentImageItem['_id'] = image.get('id')
+    #                 commentImageItem['associateId'] = image.get('associateId')  # 和CommentItem的discussionId相同
+    #                 commentImageItem['productId'] = image.get('productId')  # 不是ProductsItem的id，这个值为0
+    #                 commentImageItem['imgUrl'] = 'http:' + image.get('imgUrl')
+    #                 commentImageItem['available'] = image.get('available')
+    #                 commentImageItem['pin'] = image.get('pin')
+    #                 commentImageItem['dealt'] = image.get('dealt')
+    #                 commentImageItem['imgTitle'] = image.get('imgTitle')
+    #                 commentImageItem['isMain'] = image.get('isMain')
+    #                 yield commentImageItem
+    #
+    #     # next page
+    #     max_page = int(data.get('maxPage', '1'))
+    #     if max_page > 60:
+    #         max_page = 60
+    #     for i in range(1, max_page):
+    #         url = comment_url % (product_id, str(i))
+    #         meta = dict()
+    #         meta['product_id'] = product_id
+    #         yield Request(url=url, callback=self.parse_comments2, meta=meta)
+    #
+    # def parse_comments2(self, response):
+    #     """获取商品comment"""
+    #     try:
+    #         data = json.loads(response.text)
+    #     except Exception as e:
+    #         print('get comment failed:', e)
+    #         return None
+    #
+    #     product_id = response.meta['product_id']
+    #
+    #     commentSummaryItem = CommentSummaryItem()
+    #     commentSummary = data.get('productCommentSummary')
+    #     commentSummaryItem['goodRateShow'] = commentSummary.get('goodRateShow')
+    #     commentSummaryItem['poorRateShow'] = commentSummary.get('poorRateShow')
+    #     commentSummaryItem['poorCountStr'] = commentSummary.get('poorCountStr')
+    #     commentSummaryItem['averageScore'] = commentSummary.get('averageScore')
+    #     commentSummaryItem['generalCountStr'] = commentSummary.get('generalCountStr')
+    #     commentSummaryItem['showCount'] = commentSummary.get('showCount')
+    #     commentSummaryItem['showCountStr'] = commentSummary.get('showCountStr')
+    #     commentSummaryItem['goodCount'] = commentSummary.get('goodCount')
+    #     commentSummaryItem['generalRate'] = commentSummary.get('generalRate')
+    #     commentSummaryItem['generalCount'] = commentSummary.get('generalCount')
+    #     commentSummaryItem['skuId'] = commentSummary.get('skuId')
+    #     commentSummaryItem['goodCountStr'] = commentSummary.get('goodCountStr')
+    #     commentSummaryItem['poorRate'] = commentSummary.get('poorRate')
+    #     commentSummaryItem['afterCount'] = commentSummary.get('afterCount')
+    #     commentSummaryItem['goodRateStyle'] = commentSummary.get('goodRateStyle')
+    #     commentSummaryItem['poorCount'] = commentSummary.get('poorCount')
+    #     commentSummaryItem['skuIds'] = commentSummary.get('skuIds')
+    #     commentSummaryItem['poorRateStyle'] = commentSummary.get('poorRateStyle')
+    #     commentSummaryItem['generalRateStyle'] = commentSummary.get('generalRateStyle')
+    #     commentSummaryItem['commentCountStr'] = commentSummary.get('commentCountStr')
+    #     commentSummaryItem['commentCount'] = commentSummary.get('commentCount')
+    #     commentSummaryItem['productId'] = commentSummary.get('productId')  # 同ProductsItem的id相同
+    #     commentSummaryItem['_id'] = commentSummary.get('productId')
+    #     commentSummaryItem['afterCountStr'] = commentSummary.get('afterCountStr')
+    #     commentSummaryItem['goodRate'] = commentSummary.get('goodRate')
+    #     commentSummaryItem['generalRateShow'] = commentSummary.get('generalRateShow')
+    #     commentSummaryItem['jwotestProduct'] = data.get('jwotestProduct')
+    #     commentSummaryItem['maxPage'] = data.get('maxPage')
+    #     commentSummaryItem['score'] = data.get('score')
+    #     commentSummaryItem['soType'] = data.get('soType')
+    #     commentSummaryItem['imageListCount'] = data.get('imageListCount')
+    #     yield commentSummaryItem
+    #
+    #     for hotComment in data['hotCommentTagStatistics']:
+    #         hotCommentTagItem = HotCommentTagItem()
+    #         hotCommentTagItem['_id'] = hotComment.get('id')
+    #         hotCommentTagItem['name'] = hotComment.get('name')
+    #         hotCommentTagItem['status'] = hotComment.get('status')
+    #         hotCommentTagItem['rid'] = hotComment.get('rid')
+    #         hotCommentTagItem['productId'] = hotComment.get('productId')
+    #         hotCommentTagItem['count'] = hotComment.get('count')
+    #         hotCommentTagItem['created'] = hotComment.get('created')
+    #         hotCommentTagItem['modified'] = hotComment.get('modified')
+    #         hotCommentTagItem['type'] = hotComment.get('type')
+    #         hotCommentTagItem['canBeFiltered'] = hotComment.get('canBeFiltered')
+    #         yield hotCommentTagItem
+    #
+    #     for comment_item in data['comments']:
+    #         comment = CommentItem()
+    #         comment['_id'] = comment_item.get('id')
+    #         comment['productId'] = product_id
+    #         comment['guid'] = comment_item.get('guid')
+    #         comment['content'] = comment_item.get('content')
+    #         comment['creationTime'] = comment_item.get('creationTime')
+    #         comment['isTop'] = comment_item.get('isTop')
+    #         comment['referenceId'] = comment_item.get('referenceId')
+    #         comment['referenceName'] = comment_item.get('referenceName')
+    #         comment['referenceType'] = comment_item.get('referenceType')
+    #         comment['referenceTypeId'] = comment_item.get('referenceTypeId')
+    #         comment['firstCategory'] = comment_item.get('firstCategory')
+    #         comment['secondCategory'] = comment_item.get('secondCategory')
+    #         comment['thirdCategory'] = comment_item.get('thirdCategory')
+    #         comment['replyCount'] = comment_item.get('replyCount')
+    #         comment['score'] = comment_item.get('score')
+    #         comment['status'] = comment_item.get('status')
+    #         comment['title'] = comment_item.get('title')
+    #         comment['usefulVoteCount'] = comment_item.get('usefulVoteCount')
+    #         comment['uselessVoteCount'] = comment_item.get('uselessVoteCount')
+    #         comment['userImage'] = 'http://' + comment_item.get('userImage')
+    #         comment['userImageUrl'] = 'http://' + comment_item.get('userImageUrl')
+    #         comment['userLevelId'] = comment_item.get('userLevelId')
+    #         comment['userProvince'] = comment_item.get('userProvince')
+    #         comment['viewCount'] = comment_item.get('viewCount')
+    #         comment['orderId'] = comment_item.get('orderId')
+    #         comment['isReplyGrade'] = comment_item.get('isReplyGrade')
+    #         comment['nickname'] = comment_item.get('nickname')
+    #         comment['userClient'] = comment_item.get('userClient')
+    #         comment['mergeOrderStatus'] = comment_item.get('mergeOrderStatus')
+    #         comment['discussionId'] = comment_item.get('discussionId')
+    #         comment['productColor'] = comment_item.get('productColor')
+    #         comment['productSize'] = comment_item.get('productSize')
+    #         comment['imageCount'] = comment_item.get('imageCount')
+    #         comment['integral'] = comment_item.get('integral')
+    #         comment['userImgFlag'] = comment_item.get('userImgFlag')
+    #         comment['anonymousFlag'] = comment_item.get('anonymousFlag')
+    #         comment['userLevelName'] = comment_item.get('userLevelName')
+    #         comment['plusAvailable'] = comment_item.get('plusAvailable')
+    #         comment['recommend'] = comment_item.get('recommend')
+    #         comment['userLevelColor'] = comment_item.get('userLevelColor')
+    #         comment['userClientShow'] = comment_item.get('userClientShow')
+    #         comment['isMobile'] = comment_item.get('isMobile')
+    #         comment['days'] = comment_item.get('days')
+    #         comment['afterDays'] = comment_item.get('afterDays')
+    #         yield comment
+    #
+    #         if 'images' in comment_item:
+    #             for image in comment_item['images']:
+    #                 commentImageItem = CommentImageItem()
+    #                 commentImageItem['_id'] = image.get('id')
+    #                 commentImageItem['associateId'] = image.get('associateId')  # 和CommentItem的discussionId相同
+    #                 commentImageItem['productId'] = image.get('productId')  # 不是ProductsItem的id，这个值为0
+    #                 commentImageItem['imgUrl'] = 'http:' + image.get('imgUrl')
+    #                 commentImageItem['available'] = image.get('available')
+    #                 commentImageItem['pin'] = image.get('pin')
+    #                 commentImageItem['dealt'] = image.get('dealt')
+    #                 commentImageItem['imgTitle'] = image.get('imgTitle')
+    #                 commentImageItem['isMain'] = image.get('isMain')
+    #                 yield commentImageItem
+    #

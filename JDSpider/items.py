@@ -31,6 +31,17 @@ class ProductsItem(Item):
     poolComment = Field()  #差评数
     favourableDesc1 = Field()  #优惠描述1
     favourableDesc2 = Field()  #优惠描述2
+    brand_name = Field() # 品牌名称
+    product_name = Field() # 商品名称, 从品类那获取
+    category1 = Field() # '一级品类'
+    category2 = Field() #'二级品类'
+    category3 = Field() # 三级品类'
+    category1_url = Field() # 一级url
+    category2_url = Field() # 二级url
+    category3_url = Field() # 三级url
+    brand_url = Field() # 品牌url
+    remark_name = Field()  # 解析失败的品类name，用TTFGF分割放这里
+    remark_url = Field()  # 解析失败的url，用TTFGF分割放这里
 
 
 class ShopItem(Item):
